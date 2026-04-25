@@ -1,5 +1,11 @@
 import Link from 'next/link'
-import { CalendarClock, CircleUser, Clock, Lock } from 'lucide-react'
+import {
+  ArrowUpRight,
+  CalendarClock,
+  CircleUser,
+  Clock,
+  Lock,
+} from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Surface } from '@/components/ui/Surface'
 
@@ -41,10 +47,21 @@ const TRACKS = [
 
 export default function DashboardPage() {
   return (
-    <div className="min-h-screen bg-(--color-bg-base)">
-      {/* ─── Header ─────────────────────────────────────────────────── */}
-      <header className="border-b border-(--color-border-default) bg-(--color-bg-base)/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+    <div className="min-h-screen">
+      {/* §3.1 TopBar — Liquid Glass (única exceção à proibição de shadow §1.5) */}
+      <header
+        className="sticky top-0 z-[var(--z-layout)] w-full"
+        style={{
+          background: 'rgba(255,255,255,0.04)',
+          backdropFilter: 'blur(28px) saturate(160%)',
+          WebkitBackdropFilter: 'blur(28px) saturate(160%)',
+          borderTop: '1px solid rgba(255,255,255,0.14)',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          boxShadow:
+            '0 1px 0 rgba(255,255,255,0.07) inset, 0 8px 32px rgba(0,0,0,0.35)',
+        }}
+      >
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 md:px-8">
           <Link
             href="/dashboard"
             className="font-serif text-xl tracking-tight text-(--color-text-primary)"
@@ -54,34 +71,59 @@ export default function DashboardPage() {
 
           <button
             type="button"
-            aria-label="Perfil"
-            className="inline-flex size-11 items-center justify-center rounded-full border border-(--color-border-default) bg-(--color-bg-surface) text-(--color-text-secondary) transition-colors duration-150 ease-out hover:border-(--color-border-strong) hover:text-(--color-text-primary) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-border-focus) focus-visible:ring-offset-2 focus-visible:ring-offset-(--color-bg-base)"
+            aria-label="Abrir perfil"
+            className="inline-flex size-11 items-center justify-center rounded-md border border-(--color-border-default) bg-transparent text-(--color-text-secondary) transition-colors duration-(--duration-fast) ease-(--ease-std) hover:border-(--color-border-strong) hover:bg-white/5 hover:text-(--color-text-primary)"
           >
-            <CircleUser className="size-5" aria-hidden />
+            <CircleUser className="size-5" strokeWidth={1.5} aria-hidden />
           </button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-16 px-6 py-12">
-        {/* ─── Hero · Próxima mentoria ao vivo ───────────────────────── */}
-        <section aria-labelledby="next-live-heading" className="space-y-4">
-          <p className="font-sans text-xs uppercase tracking-[0.24em] text-(--color-text-muted)">
-            Próxima mentoria ao vivo
+      <main className="mx-auto max-w-6xl space-y-14 px-5 py-10 md:px-8 md:py-14">
+        {/* §3.2 Page layout — section label + h1 + subtitle */}
+        <div>
+          <p className="label-section mb-3">Lobby</p>
+          <h1 className="font-serif text-3xl font-semibold leading-snug tracking-tight md:text-4xl">
+            Bem-vindo de volta.
+          </h1>
+          <p className="mt-2 font-sans text-[12.5px] text-(--color-text-muted)">
+            Sua próxima mentoria, suas trilhas ativas e o estado do seu acesso.
           </p>
+        </div>
 
+        {/* §2.11 Hero card com accent bar bronze + cardIn animation */}
+        <section aria-labelledby="next-live-heading">
           <Surface
-            variant="elevated"
-            className="overflow-hidden p-8 md:p-10"
+            variant="card"
+            className="relative overflow-hidden p-6 md:p-8"
           >
+            {/* Accent bar bronze no topo (§2.11) */}
+            <div
+              aria-hidden
+              className="absolute inset-x-0 top-0 h-[2px] opacity-70"
+              style={{
+                background:
+                  'linear-gradient(90deg, var(--color-bronze-400) 0%, transparent 100%)',
+              }}
+            />
+
             <div className="grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
-              <div className="space-y-5">
+              <div className="space-y-4">
+                {/* §2.5 label-section em bronze para destaque de "próximo" */}
+                <p
+                  className="font-sans text-[10px] font-semibold uppercase tracking-[0.22em]"
+                  style={{ color: 'rgba(201,164,122,0.85)' }}
+                >
+                  Próxima mentoria ao vivo
+                </p>
+
                 <p className="font-sans text-sm font-medium text-(--color-bronze-400)">
                   {NEXT_LIVE.module}
                 </p>
 
                 <h2
                   id="next-live-heading"
-                  className="font-serif text-3xl leading-tight md:text-4xl"
+                  className="font-serif text-2xl font-semibold leading-tight tracking-tight md:text-3xl"
                 >
                   {NEXT_LIVE.title}
                 </h2>
@@ -90,6 +132,7 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-2">
                     <CalendarClock
                       className="size-4 text-(--color-text-muted)"
+                      strokeWidth={1.5}
                       aria-hidden
                     />
                     <dt className="sr-only">Quando</dt>
@@ -98,6 +141,7 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-2">
                     <Clock
                       className="size-4 text-(--color-text-muted)"
+                      strokeWidth={1.5}
                       aria-hidden
                     />
                     <dt className="sr-only">Duração</dt>
@@ -122,16 +166,14 @@ export default function DashboardPage() {
           </Surface>
         </section>
 
-        {/* ─── Trilhas ───────────────────────────────────────────────── */}
+        {/* §3.3 Grade de cards — Trilhas com hover-lift */}
         <section aria-labelledby="tracks-heading" className="space-y-6">
           <div className="flex items-end justify-between">
-            <div className="space-y-1">
-              <p className="font-sans text-xs uppercase tracking-[0.24em] text-(--color-text-muted)">
-                Trilhas
-              </p>
+            <div>
+              <p className="label-section mb-2">Trilhas</p>
               <h2
                 id="tracks-heading"
-                className="font-serif text-2xl leading-tight md:text-3xl"
+                className="font-serif text-2xl font-semibold leading-tight tracking-tight md:text-3xl"
               >
                 Seu acesso ativo
               </h2>
@@ -139,29 +181,43 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {TRACKS.map(track => (
+            {TRACKS.map((track, idx) => (
               <Link
                 key={track.slug}
                 href={`/trilhas/${track.slug}`}
                 className="group block focus-visible:outline-none"
               >
                 <Surface
+                  variant="card"
                   interactive
-                  variant="surface"
-                  className="h-full p-6 group-focus-visible:border-(--color-border-focus) group-focus-visible:ring-2 group-focus-visible:ring-(--color-border-focus) group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-(--color-bg-base)"
+                  className="relative h-full p-6 group-focus-visible:border-(--color-border-focus)"
+                  style={{ animationDelay: `${idx * 60}ms` }}
                 >
                   <div className="flex h-full flex-col gap-4">
-                    <p className="font-sans text-[11px] uppercase tracking-[0.2em] text-(--color-bronze-400)">
-                      {track.badge}
-                    </p>
-                    <h3 className="font-serif text-2xl leading-tight">
+                    <div className="flex items-start justify-between gap-3">
+                      <p
+                        className="font-sans text-[10px] font-semibold uppercase tracking-[0.2em]"
+                        style={{ color: 'rgba(201,164,122,0.85)' }}
+                      >
+                        {track.badge}
+                      </p>
+                      <ArrowUpRight
+                        className="size-4 text-(--color-text-muted) transition-transform duration-(--duration-fast) ease-(--ease-std) group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-(--color-text-primary)"
+                        strokeWidth={1.5}
+                        aria-hidden
+                      />
+                    </div>
+
+                    <h3 className="font-serif text-2xl font-semibold leading-tight tracking-tight">
                       {track.label}
                     </h3>
+
                     <p className="font-sans text-sm leading-relaxed text-(--color-text-secondary)">
                       {track.description}
                     </p>
-                    <span className="mt-auto font-sans text-sm text-(--color-text-muted) transition-colors duration-150 group-hover:text-(--color-text-primary)">
-                      Abrir trilha →
+
+                    <span className="mt-auto inline-flex items-center gap-1.5 font-sans text-xs font-medium uppercase tracking-[0.18em] text-(--color-text-muted) transition-colors duration-(--duration-fast) ease-(--ease-std) group-hover:text-(--color-bronze-400)">
+                      Abrir trilha
                     </span>
                   </div>
                 </Surface>

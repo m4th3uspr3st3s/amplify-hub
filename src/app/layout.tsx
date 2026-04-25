@@ -2,21 +2,20 @@ import type { Metadata } from 'next'
 import { EB_Garamond, DM_Sans } from 'next/font/google'
 import './globals.css'
 
-// Tipografia institucional Amplify (DS Universal §1.3).
-// EB Garamond: serif para display, H1, H2, blockquote.
-// DM Sans:     sans para corpo, UI, botões, label, micro-copy.
+// DS Universal §1.3 / §6.1 — fontes institucionais Amplify.
+// As variáveis CSS expostas aqui são consumidas em globals.css via @theme.
 const ebGaramond = EB_Garamond({
-  variable: '--font-serif',
+  variable: '--font-eb-garamond',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['500', '600', '700', '800'],
   style: ['normal', 'italic'],
   display: 'swap',
 })
 
 const dmSans = DM_Sans({
-  variable: '--font-sans',
+  variable: '--font-dm-sans',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '600'],
   style: ['normal', 'italic'],
   display: 'swap',
 })
@@ -40,11 +39,8 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       className={`${ebGaramond.variable} ${dmSans.variable} h-full antialiased`}
-      data-theme="dark"
     >
-      <body className="min-h-full flex flex-col font-sans bg-bg-base text-text-primary">
-        {children}
-      </body>
+      <body className="min-h-full flex flex-col font-sans">{children}</body>
     </html>
   )
 }

@@ -2,8 +2,9 @@ import type { InputHTMLAttributes } from 'react'
 import { cn } from '@/lib/cn'
 
 /**
- * Input institucional. Borda 1px, sem sombra, fundo surface.
- * Touch target garantido por `min-h-11` (44px) — DS §0.1.
+ * Input institucional · DS Universal §5.1.
+ * Cor de fundo, borda, hover e focus ring bronze (2-layer) vêm de globals.css.
+ * O componente apenas aplica sizing + tipografia + touch target 44px.
  */
 type InputProps = InputHTMLAttributes<HTMLInputElement>
 
@@ -11,14 +12,9 @@ export function Input({ className, ...props }: InputProps) {
   return (
     <input
       className={cn(
-        'block w-full min-h-11 px-4 py-2 rounded-md',
-        'bg-(--color-bg-surface) text-(--color-text-primary) placeholder:text-(--color-text-muted)',
-        'border border-(--color-border-default)',
-        'transition-colors duration-150 ease-out',
-        'hover:border-(--color-border-strong)',
-        'focus-visible:outline-none focus-visible:border-(--color-border-focus) focus-visible:ring-2 focus-visible:ring-(--color-border-focus) focus-visible:ring-offset-2 focus-visible:ring-offset-(--color-bg-base)',
-        'disabled:opacity-50 disabled:pointer-events-none',
+        'block w-full min-h-11 px-4 py-2',
         'font-sans text-sm',
+        'disabled:opacity-40 disabled:pointer-events-none',
         className,
       )}
       {...props}

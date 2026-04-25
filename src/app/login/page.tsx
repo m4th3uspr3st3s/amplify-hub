@@ -10,14 +10,12 @@ export const metadata = {
 
 export default function LoginPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-(--color-bg-base) px-6 py-16">
-      <div className="w-full max-w-md space-y-10">
-        {/* Cabeçalho institucional */}
+    <main className="flex min-h-screen items-center justify-center px-6 py-16">
+      <div className="w-full max-w-md">
+        {/* §3.2 Page layout — header institucional centralizado */}
         <header className="space-y-3 text-center">
-          <p className="font-sans text-xs uppercase tracking-[0.24em] text-(--color-text-muted)">
-            Amplify Hub
-          </p>
-          <h1 className="font-serif text-4xl leading-tight md:text-5xl">
+          <p className="label-section">Amplify Hub</p>
+          <h1 className="font-serif text-4xl font-semibold leading-tight tracking-tight md:text-5xl">
             Acessar Hub
           </h1>
           <p className="font-sans text-sm text-(--color-text-secondary)">
@@ -25,13 +23,14 @@ export default function LoginPage() {
           </p>
         </header>
 
-        {/* Formulário */}
-        <Surface className="p-8 space-y-6" variant="surface">
+        {/* §2.4 Surface elevada para form (chrome de autenticação) */}
+        <Surface variant="elevated" className="mt-10 p-8 space-y-6">
           <form className="space-y-5" autoComplete="on">
+            {/* §5.2 Label uppercase tracking-[0.2em] */}
             <div className="space-y-2">
               <label
                 htmlFor="email"
-                className="block font-sans text-sm font-medium text-(--color-text-secondary)"
+                className="block font-sans text-[10px] uppercase tracking-[0.2em] text-(--color-text-tertiary)"
               >
                 Email
               </label>
@@ -52,29 +51,27 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {/* Divisor com discrição (sem sombra; apenas linha) */}
+          {/* Divisor — borda + label, sem sombra (§1.5) */}
           <div className="relative py-1">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-(--color-border-default)" />
             </div>
             <div className="relative flex justify-center">
-              <span className="bg-(--color-bg-surface) px-3 font-sans text-xs uppercase tracking-[0.16em] text-(--color-text-muted)">
+              <span className="bg-(--color-bg-elevated) px-3 font-sans text-[10px] uppercase tracking-[0.2em] text-(--color-text-muted)">
                 ou
               </span>
             </div>
           </div>
 
-          <Link
-            href="/login/senha"
-            className="flex w-full items-center justify-center gap-2 min-h-11 px-5 rounded-md border border-(--color-border-default) font-sans text-sm font-medium text-(--color-text-secondary) transition-colors duration-150 ease-out hover:border-(--color-border-strong) hover:text-(--color-text-primary) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-border-focus) focus-visible:ring-offset-2 focus-visible:ring-offset-(--color-bg-base)"
-          >
+          {/* §2.2 Botão ghost via classe utilitária */}
+          <Link href="/login/senha" className="btn-ghost w-full">
             <KeyRound className="size-4" aria-hidden />
             Entrar com senha
           </Link>
         </Surface>
 
         {/* Rodapé compliance */}
-        <p className="text-center font-sans text-xs leading-relaxed text-(--color-text-muted)">
+        <p className="mt-8 text-center font-sans text-xs leading-relaxed text-(--color-text-muted)">
           Acesso restrito a alunos com matrícula ativa.
           <br />
           Dr. Matheus Prestes · CRM/SP 235.420
