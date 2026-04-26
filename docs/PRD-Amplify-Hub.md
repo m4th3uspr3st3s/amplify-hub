@@ -378,68 +378,88 @@ Server Action joinLiveSession() insere attendance_records.joined_at
 
 ---
 
-## 6. Provisionamento — webhook Kiwify
+## 6. Provisionamento (Manual v1)
 
-### 6.1 Endpoint
+> **Decisão arquitetural sancionada pelo Owner (2026-04-26).** Os produtos high-ticket do portfólio (`Protocolo Amplify`, `Protocolo Atlas`) **não** dependerão de plataformas terceiras para conceder acesso na v1. A base é altamente selecionada — comprador a comprador — e o provisionamento será **100% manual**, operado pelo próprio Owner via **Supabase Studio**. Nenhum webhook externo, nenhum segredo de plataforma de pagamento, nenhuma integração HMAC. A `Kiwify` permanece **apenas** como gateway de checkout fora do Hub; ela não fala com o `hub.amplifyhealth.com.br`.
+
+### 6.1 Fluxo operacional
 
 ```
-POST https://hub.amplifyhealth.com.br/api/webhooks/kiwify
+Owner registra venda (Kiwify, PIX, contrato, etc.)
+        │
+        ▼
+Supabase Studio → tabela `purchases` → INSERT manual
+        │  (status='paid', kiwify_order_id='manual-<trilha>-<seq>',
+        │   email, product_code, amount_cents, purchased_at, raw_payload='{}')
+        ▼
+Aluno acessa /login e solicita magic link
+        │
+        ▼
+Supabase Auth cria `auth.users` para o email (se primeira vez)
+        │
+        ▼
+Trigger `link_pending_purchases` casa purchases.email com auth.users.id
+        │
+        ▼
+View `entitlements` reflete a trilha → RLS libera módulos automaticamente
 ```
 
-`app/api/webhooks/kiwify/route.ts` com `export const runtime = 'nodejs'`.
+A trigger `link_pending_purchases` (definida na migração `0001_initial_schema.sql`) é a peça central: ela permite que o registro de `purchases` exista **antes** do `auth.users`, então o `user_id` é preenchido no momento do primeiro login do aluno. Resultado: o Owner pode provisionar o acesso assincronamente, sem coordenar com o aluno.
 
-### 6.2 Eventos suportados (v1)
+### 6.2 Convenção do `kiwify_order_id` manual
 
-| Evento | Ação |
+O campo continua sendo `UNIQUE NOT NULL` (idempotência). Para registros manuais, adotar a convenção:
+
+| Trilha | Padrão |
 |---|---|
-| `order.paid` / `order.approved` | UPSERT `purchases (status='paid')`; cria `auth.users` se email novo; envia magic link |
-| `order.refunded` | UPDATE `purchases.status = 'refunded'`; **acesso revogado imediatamente** (view filtra) |
-| `order.chargeback` | Idem refunded; alerta admin |
-| `subscription.canceled` (futuro) | `status = 'canceled'` |
+| `protocolo_atlas` | `manual-atlas-001`, `manual-atlas-002`, … |
+| `protocolo_amplify` | `manual-amplify-001`, … |
+| `dmb` | `manual-dmb-001`, … |
+| `imago` | `manual-imago-001`, … |
 
-### 6.3 Mapeamento `product_code → track`
+O prefixo `manual-` torna trivial filtrar registros provisionados manualmente versus registros vindos de qualquer integração futura.
 
-Variáveis de ambiente (`.env.example`):
+### 6.3 Domínio de `product_code → track`
 
-```
-KIWIFY_PRODUCT_PROTOCOLO=protocolo_amplify
-KIWIFY_PRODUCT_ATLAS=protocolo_atlas
-KIWIFY_PRODUCT_DMB=dmb
-KIWIFY_PRODUCT_IMAGO=imago
-```
+O contrato lógico entre `purchases.product_code` e `modules.track` permanece. Sem variáveis de ambiente associadas — os valores são literais escritos diretamente pelo Owner:
 
-Produto desconhecido → log `WARN` + `product_code = 'unknown'` para revisão manual.
+| `product_code` | `track` correspondente |
+|---|---|
+| `protocolo_amplify` | `protocolo_amplify` |
+| `protocolo_atlas` | `protocolo_atlas` |
+| `dmb` | `dmb` |
+| `imago` | `imago` |
+| `amplisquad` | `amplisquad` |
 
-### 6.4 Verificação de assinatura
+Qualquer outro valor não casa com nenhum `modules.track` e portanto **não libera acesso** — é fail-closed por design.
 
-1. Lê `req.text()` cru.
-2. `crypto.createHmac('sha256', KIWIFY_WEBHOOK_SECRET).update(rawBody).digest('hex')`.
-3. Compara em tempo constante (`crypto.timingSafeEqual`).
-4. Falha → `401`. Sucesso → segue.
+### 6.4 Revogação de acesso
 
-### 6.5 Idempotência
+Refund, chargeback ou cancelamento são igualmente operados manualmente:
 
-`purchases.kiwify_order_id UNIQUE` + `INSERT ... ON CONFLICT DO UPDATE`.
-
-### 6.6 Provisionamento
-
-```
-Webhook OK
-  ├─► UPSERT purchases (...)
-  ├─► auth.users com este email?
-  │     ├─► SIM → trigger link_pending_purchases já casou user_id
-  │     └─► NÃO → admin.createUser({ email }) + sendMagicLink(email)
-  └─► Logar outcome
+```sql
+update public.purchases
+set status = 'refunded'
+where kiwify_order_id = 'manual-atlas-007';
 ```
 
-Aluno recebe magic link → cai em `/onboarding` (nome, CRM opcional, avatar).
+A view `entitlements` filtra `status = 'paid'`, então o acesso cai na **próxima query** do aluno autenticado. Sem job, sem cron.
 
-### 6.7 Auth dual — magic link + senha
+### 6.5 Auth dual — magic link + senha
 
 Supabase Auth aceita os dois flows nativamente. UI:
 
 - `/login` apresenta magic link como primário ("Receber link de acesso") e link secundário "Entrar com senha".
 - `/conta/seguranca` permite criar/alterar senha (segundo fator de conveniência).
+
+### 6.6 Fora de escopo na v1 (registrado para futuro)
+
+- Webhook Kiwify automatizado (`/api/webhooks/kiwify/route.ts`).
+- Verificação HMAC SHA-256 de payload externo.
+- `admin.createUser` programático no provisionamento.
+- `sendMagicLink` programático após confirmação de pagamento.
+
+Estes itens **podem** voltar à pauta quando a base de alunos crescer a ponto de tornar o provisionamento manual oneroso. Até lá, **não implementar**.
 
 ---
 
