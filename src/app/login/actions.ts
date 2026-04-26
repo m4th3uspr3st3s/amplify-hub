@@ -42,7 +42,9 @@ export async function loginWithMagicLink(
     options: {
       // PKCE callback oficial — exchangeCodeForSession ocorre em
       // /auth/callback/route.ts, que entao redireciona para `next`.
-      emailRedirectTo: `${appUrl}/auth/callback?next=/dashboard`,
+      // Onboarding obrigatorio (PRD §6.7 auth dual): primeiro acesso via
+      // magic link cai em /conta/senha para o usuario definir o fallback.
+      emailRedirectTo: `${appUrl}/auth/callback?next=/conta/senha`,
       // Auth dual: o Supabase cria o usuário automaticamente se não existir.
       // O webhook Kiwify (Marco 6) é quem provisiona usuários pagos; este flag
       // permanece `true` enquanto o webhook não está em produção, para que o
