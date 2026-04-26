@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { EB_Garamond, DM_Sans } from 'next/font/google'
+import { Toaster } from 'sonner'
 import './globals.css'
 
 // DS Universal §1.3 / §6.1 — fontes institucionais Amplify.
@@ -40,7 +41,22 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${ebGaramond.variable} ${dmSans.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        {children}
+        {/* DS Universal §2.6 — Toast Liquid Glass dark, sem sombra estrutural. */}
+        <Toaster
+          theme="dark"
+          position="top-center"
+          richColors
+          closeButton
+          toastOptions={{
+            classNames: {
+              toast:
+                'border border-(--color-border-default) bg-(--color-bg-elevated) text-(--color-text-primary) font-sans',
+            },
+          }}
+        />
+      </body>
     </html>
   )
 }

@@ -1,8 +1,7 @@
 import Link from 'next/link'
-import { Mail, KeyRound } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
+import { KeyRound } from 'lucide-react'
 import { Surface } from '@/components/ui/Surface'
+import { LoginForm } from './LoginForm'
 
 export const metadata = {
   title: 'Acessar · Amplify Hub',
@@ -25,31 +24,7 @@ export default function LoginPage() {
 
         {/* §2.4 Surface elevada para form (chrome de autenticação) */}
         <Surface variant="elevated" className="mt-10 p-8 space-y-6">
-          <form className="space-y-5" autoComplete="on">
-            {/* §5.2 Label uppercase tracking-[0.2em] */}
-            <div className="space-y-2">
-              <label
-                htmlFor="email"
-                className="block font-sans text-[10px] uppercase tracking-[0.2em] text-(--color-text-tertiary)"
-              >
-                Email
-              </label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                placeholder="seu-email@dominio.com"
-                required
-              />
-            </div>
-
-            <Button type="submit" variant="primary" size="lg" className="w-full">
-              <Mail className="size-4" aria-hidden />
-              Receber link de acesso
-            </Button>
-          </form>
+          <LoginForm />
 
           {/* Divisor — borda + label, sem sombra (§1.5) */}
           <div className="relative py-1">

@@ -1,25 +1,19 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import {
   ArrowUpRight,
   CalendarClock,
   CircleUser,
   Clock,
   Lock,
+  Radio,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Surface } from '@/components/ui/Surface'
+import { createClient } from '@/lib/supabase/server'
 
 export const metadata = {
   title: 'Lobby · Amplify Hub',
-}
-
-// Dados fictícios — Marco 3 é apenas esqueleto visual.
-// Backend (Supabase + Stream) entra no Marco 4.
-const NEXT_LIVE = {
-  module: 'Protocolo Amplify · Módulo 3',
-  title: 'Arquitetura de prompts clínicos para anamnese assistida',
-  scheduledForLabel: 'Quinta-feira, 30 de abril · 20h00',
-  durationLabel: '90 minutos',
 }
 
 const TRACKS = [
@@ -45,7 +39,67 @@ const TRACKS = [
   },
 ] as const
 
-export default function DashboardPage() {
+const DATE_FMT = new Intl.DateTimeFormat('pt-BR', {
+  weekday: 'long',
+  day: '2-digit',
+  month: 'long',
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'America/Sao_Paulo',
+})
+
+function formatScheduledFor(iso: string) {
+  // "Quinta-feira, 30 de abril, 20:00" → padroniza com "·" entre data e hora.
+  const parts = DATE_FMT.format(new Date(iso))
+  return parts.replace(/,\s*(\d{2}:\d{2})$/, ' · $1')
+}
+
+function formatGreetingName(fullName: string | null) {
+  if (!fullName) return null
+  const first = fullName.trim().split(/\s+/)[0]
+  if (!first) return null
+  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()
+}
+
+export default async function DashboardPage() {
+  const supabase = await createClient()
+
+  // Defesa em profundidade: o proxy.ts já redireciona, mas o Data Access Layer
+  // do Next.js 16 (authentication.md) exige verificação no Server Component.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  const [profileRes, liveRes] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .maybeSingle(),
+    supabase
+      .from('live_sessions')
+      .select(
+        'id, title, scheduled_for, duration_minutes, stream_call_id, lessons(title, modules(title, track))',
+      )
+      .eq('is_active', true)
+      .order('scheduled_for', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  const greetingName = formatGreetingName(profileRes.data?.full_name ?? null)
+  const activeSession = liveRes.data
+  const lesson = Array.isArray(activeSession?.lessons)
+    ? activeSession?.lessons[0]
+    : activeSession?.lessons
+  const moduleEntity = Array.isArray(lesson?.modules)
+    ? lesson?.modules[0]
+    : lesson?.modules
+
   return (
     <div className="min-h-screen">
       {/* §3.1 TopBar — Liquid Glass (única exceção à proibição de shadow §1.5) */}
@@ -84,7 +138,9 @@ export default function DashboardPage() {
         <div>
           <p className="label-section mb-3">Lobby</p>
           <h1 className="font-serif text-3xl font-semibold leading-snug tracking-tight md:text-4xl">
-            Bem-vindo de volta.
+            {greetingName
+              ? `Bem-vindo de volta, ${greetingName}.`
+              : 'Bem-vindo de volta.'}
           </h1>
           <p className="mt-2 font-sans text-[12.5px] text-(--color-text-muted)">
             Sua próxima mentoria, suas trilhas ativas e o estado do seu acesso.
@@ -109,58 +165,78 @@ export default function DashboardPage() {
 
             <div className="grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
               <div className="space-y-4">
-                {/* §2.5 label-section em bronze para destaque de "próximo" */}
+                {/* §2.5 label-section em bronze para destaque de "ao vivo" / "próximo" */}
                 <p
                   className="font-sans text-[10px] font-semibold uppercase tracking-[0.22em]"
                   style={{ color: 'rgba(201,164,122,0.85)' }}
                 >
-                  Próxima mentoria ao vivo
+                  {activeSession ? 'Ao vivo agora' : 'Próxima mentoria ao vivo'}
                 </p>
 
-                <p className="font-sans text-sm font-medium text-(--color-bronze-400)">
-                  {NEXT_LIVE.module}
-                </p>
+                {activeSession && moduleEntity ? (
+                  <p className="font-sans text-sm font-medium text-(--color-bronze-400)">
+                    {moduleEntity.title}
+                  </p>
+                ) : null}
 
                 <h2
                   id="next-live-heading"
                   className="font-serif text-2xl font-semibold leading-tight tracking-tight md:text-3xl"
                 >
-                  {NEXT_LIVE.title}
+                  {activeSession
+                    ? activeSession.title
+                    : 'Nenhuma sessão ao vivo neste momento.'}
                 </h2>
 
-                <dl className="flex flex-wrap gap-x-8 gap-y-2 font-sans text-sm text-(--color-text-secondary)">
-                  <div className="flex items-center gap-2">
-                    <CalendarClock
-                      className="size-4 text-(--color-text-muted)"
-                      strokeWidth={1.5}
-                      aria-hidden
-                    />
-                    <dt className="sr-only">Quando</dt>
-                    <dd>{NEXT_LIVE.scheduledForLabel}</dd>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Clock
-                      className="size-4 text-(--color-text-muted)"
-                      strokeWidth={1.5}
-                      aria-hidden
-                    />
-                    <dt className="sr-only">Duração</dt>
-                    <dd>{NEXT_LIVE.durationLabel}</dd>
-                  </div>
-                </dl>
+                {activeSession ? (
+                  <dl className="flex flex-wrap gap-x-8 gap-y-2 font-sans text-sm text-(--color-text-secondary)">
+                    <div className="flex items-center gap-2">
+                      <CalendarClock
+                        className="size-4 text-(--color-text-muted)"
+                        strokeWidth={1.5}
+                        aria-hidden
+                      />
+                      <dt className="sr-only">Quando</dt>
+                      <dd>{formatScheduledFor(activeSession.scheduled_for)}</dd>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock
+                        className="size-4 text-(--color-text-muted)"
+                        strokeWidth={1.5}
+                        aria-hidden
+                      />
+                      <dt className="sr-only">Duração</dt>
+                      <dd>{activeSession.duration_minutes} minutos</dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <p className="font-sans text-sm text-(--color-text-muted)">
+                    Avisaremos por e-mail quando a próxima aula entrar no ar.
+                  </p>
+                )}
               </div>
 
               <div className="md:min-w-64">
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="lg"
-                  className="w-full"
-                  disabled
-                >
-                  <Lock className="size-4" aria-hidden />
-                  A sala abre 15 minutos antes
-                </Button>
+                {activeSession ? (
+                  <Link
+                    href={`/aulas/${activeSession.stream_call_id}`}
+                    className="btn-primary w-full"
+                  >
+                    <Radio className="size-4" aria-hidden />
+                    Entrar na sala
+                  </Link>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="lg"
+                    className="w-full"
+                    disabled
+                  >
+                    <Lock className="size-4" aria-hidden />
+                    A sala abre 15 minutos antes
+                  </Button>
+                )}
               </div>
             </div>
           </Surface>
