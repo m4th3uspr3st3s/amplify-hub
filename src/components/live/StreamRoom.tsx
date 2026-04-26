@@ -23,12 +23,14 @@ type TokenResponse = {
 type StreamRoomProps = {
   callType: string
   callId: string
+  isAdmin: boolean
 }
 
-export function StreamRoom({ callType, callId }: StreamRoomProps) {
+export function StreamRoom({ callType, callId, isAdmin }: StreamRoomProps) {
   const [client, setClient] = useState<StreamVideoClient | null>(null)
   const [call, setCall] = useState<Call | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [roomNotOpen, setRoomNotOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -53,9 +55,24 @@ export function StreamRoom({ callType, callId }: StreamRoomProps) {
         })
 
         activeCall = activeClient.call(callType, callId)
-        // create:false — alunos entram, mas não criam calls. A criação fica
-        // no Supabase Studio (PRD §4.2 RLS de live_sessions).
-        await activeCall.join({ create: false })
+        // Apenas o Host (admin) pode instanciar a call no Stream Video. Alunos
+        // só conseguem entrar depois que a sala foi aberta — caso contrário, o
+        // SDK lança erro e exibimos a UX de espera (Passo 3 do laudo).
+        try {
+          await activeCall.join({ create: isAdmin })
+        } catch (joinErr) {
+          console.error('[StreamRoom] call.join falhou', {
+            callType,
+            callId,
+            isAdmin,
+            error: joinErr,
+          })
+          if (!cancelled && !isAdmin) {
+            setRoomNotOpen(true)
+            return
+          }
+          throw joinErr
+        }
 
         if (cancelled) {
           await activeCall.leave().catch(() => {})
@@ -65,6 +82,12 @@ export function StreamRoom({ callType, callId }: StreamRoomProps) {
         setClient(activeClient)
         setCall(activeCall)
       } catch (err) {
+        console.error('[StreamRoom] bootstrap falhou', {
+          callType,
+          callId,
+          isAdmin,
+          error: err,
+        })
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'unknown_error')
         }
@@ -78,7 +101,18 @@ export function StreamRoom({ callType, callId }: StreamRoomProps) {
       activeCall?.leave().catch(() => {})
       activeClient?.disconnectUser().catch(() => {})
     }
-  }, [callType, callId])
+  }, [callType, callId, isAdmin])
+
+  if (roomNotOpen) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center px-6">
+        <p className="max-w-md text-center font-sans text-sm text-(--color-text-muted)">
+          A sala ainda não foi aberta pelo Dr. Matheus. Aguarde alguns instantes
+          e recarregue.
+        </p>
+      </div>
+    )
+  }
 
   if (error) {
     return (

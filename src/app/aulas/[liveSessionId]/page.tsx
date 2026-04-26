@@ -42,10 +42,16 @@ export default async function LiveRoomPage({
     ? liveSession.stream_call_id.split(':')
     : [liveSession.stream_call_type, liveSession.stream_call_id]
 
+  // app_metadata é gerenciado via service role / Supabase Studio; user_metadata
+  // é editável pelo próprio usuário. Para claim de admin, usamos sempre
+  // app_metadata (PRD §4.2 — RLS de live_sessions/modules referencia este claim).
+  const isAdmin = user.app_metadata?.admin === true
+
   return (
     <StreamRoom
       callType={parsedType}
       callId={parsedId}
+      isAdmin={isAdmin}
     />
   )
 }
