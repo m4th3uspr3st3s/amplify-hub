@@ -54,6 +54,13 @@ export async function loginWithMagicLink(
   })
 
   if (error) {
+    // Log server-side: a mensagem real do Supabase (rate-limit, SMTP, etc.)
+    // fica visivel no painel de Logs da Vercel sem vazar para o cliente.
+    console.error('[login] signInWithOtp failed', {
+      status: error.status,
+      code: error.code,
+      message: error.message,
+    })
     return {
       status: 'error',
       message:
