@@ -1,10 +1,18 @@
 'use server'
 
+import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 
 const LoginSchema = z.object({
   email: z.email({ error: 'Informe um e-mail válido.' }).trim().toLowerCase(),
+})
+
+const PasswordLoginSchema = z.object({
+  email: z.email({ error: 'Informe um e-mail válido.' }).trim().toLowerCase(),
+  password: z
+    .string({ error: 'Informe a sua senha.' })
+    .min(1, { error: 'Informe a sua senha.' }),
 })
 
 export type LoginState =
@@ -53,4 +61,42 @@ export async function loginWithMagicLink(
     status: 'success',
     message: 'Verifique o seu e-mail para acessar o Hub.',
   }
+}
+
+export async function loginWithPassword(
+  _prev: LoginState,
+  formData: FormData,
+): Promise<LoginState> {
+  const parsed = PasswordLoginSchema.safeParse({
+    email: formData.get('email'),
+    password: formData.get('password'),
+  })
+
+  if (!parsed.success) {
+    return {
+      status: 'error',
+      message: parsed.error.issues[0]?.message ?? 'Dados inválidos.',
+    }
+  }
+
+  const supabase = await createClient()
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email: parsed.data.email,
+    password: parsed.data.password,
+  })
+
+  if (error) {
+    // Não vazamos a causa exata (existência de conta vs senha errada) para
+    // evitar enumeração de e-mails — Supabase retorna `Invalid login
+    // credentials` em ambos os casos, mas reforçamos a mensagem unificada.
+    return {
+      status: 'error',
+      message: 'E-mail ou senha incorretos.',
+    }
+  }
+
+  // redirect() lança internamente — precisa ficar fora de try/catch e ser a
+  // última instrução. O proxy.ts revalida a sessão na próxima request.
+  redirect('/dashboard')
 }
