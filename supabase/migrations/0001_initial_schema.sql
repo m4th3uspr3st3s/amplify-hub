@@ -12,6 +12,10 @@
 --   · Indices essenciais (PRD §4.3).
 --   · Row Level Security em TODAS as tabelas do schema public.
 --
+-- Ordem dos blocos: dependências resolvidas top-down — `purchases` e a view
+-- `entitlements` precisam existir antes de `modules`/`lessons`/etc., porque
+-- as RLS policies dessas tabelas consultam `entitlements` no `using`.
+--
 -- Convenções:
 --   · UUIDs gerados via gen_random_uuid() (extensão pgcrypto).
 --   · Todas as FKs para auth.users usam ON DELETE CASCADE.
@@ -96,7 +100,77 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- ===========================================================================
--- 3. modules — unidade pedagógica de alto nível (PRD §4.2)
+-- 3. purchases — registro imutável Kiwify (PRD §4.2)
+-- Definida cedo porque a view `entitlements` deriva dela e as policies de
+-- `modules`/`lessons`/`live_sessions`/`lesson_assets` consultam a view.
+-- ===========================================================================
+create table public.purchases (
+  id              uuid primary key default gen_random_uuid(),
+  user_id         uuid references auth.users(id) on delete set null,
+  email           text not null,
+  kiwify_order_id text not null unique,
+  product_code    text not null,
+  status          text not null
+                    check (status in ('paid', 'refunded', 'chargeback', 'canceled')),
+  amount_cents    int  not null,
+  currency        text not null default 'BRL',
+  purchased_at    timestamptz not null,
+  raw_payload     jsonb not null,
+  created_at      timestamptz not null default now()
+);
+
+create index purchases_email_idx on public.purchases (email);
+
+alter table public.purchases enable row level security;
+
+-- SELECT: aluno vê apenas as próprias compras.
+create policy "purchases_select_own"
+  on public.purchases for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+-- INSERT/UPDATE: apenas via service_role (webhook handler).
+
+-- ---------------------------------------------------------------------------
+-- 3.1 Trigger link_pending_purchases (PRD §4.4)
+-- Quando um auth.users novo casa com purchases.email pendentes, espelha o
+-- user_id para que o entitlement passe a valer imediatamente.
+-- ---------------------------------------------------------------------------
+create or replace function public.link_pending_purchases()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.purchases
+     set user_id = new.id
+   where user_id is null
+     and lower(email) = lower(new.email);
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created_link_purchases
+  after insert on auth.users
+  for each row execute function public.link_pending_purchases();
+
+-- ===========================================================================
+-- 4. entitlements (view) — acesso ativo (PRD §4.2)
+-- Refund/chargeback derruba acesso imediato pelo filtro status='paid'.
+-- ===========================================================================
+create or replace view public.entitlements as
+select distinct
+  user_id,
+  product_code as track
+from public.purchases
+where status = 'paid'
+  and user_id is not null;
+
+grant select on public.entitlements to authenticated;
+
+-- ===========================================================================
+-- 5. modules — unidade pedagógica de alto nível (PRD §4.2)
 -- ===========================================================================
 create table public.modules (
   id           uuid primary key default gen_random_uuid(),
@@ -133,7 +207,7 @@ create policy "modules_select_entitled"
 -- INSERT/UPDATE/DELETE: apenas service_role (Supabase Studio na v1).
 
 -- ===========================================================================
--- 4. lessons — agrupador lógico de live_sessions + assets (PRD §4.2)
+-- 6. lessons — agrupador lógico de live_sessions + assets (PRD §4.2)
 -- ===========================================================================
 create table public.lessons (
   id           uuid primary key default gen_random_uuid(),
@@ -175,7 +249,7 @@ create policy "lessons_select_via_module"
   );
 
 -- ===========================================================================
--- 5. live_sessions — sessão ao vivo Stream Video (PRD §4.2)
+-- 7. live_sessions — sessão ao vivo Stream Video (PRD §4.2)
 -- ===========================================================================
 create table public.live_sessions (
   id                uuid primary key default gen_random_uuid(),
@@ -234,40 +308,7 @@ create policy "live_sessions_update_host"
   with check (auth.uid() = host_user_id);
 
 -- ===========================================================================
--- 6. attendance_records — presença por (aluno, sessão) (PRD §4.2)
--- ===========================================================================
-create table public.attendance_records (
-  user_id                uuid not null references auth.users(id) on delete cascade,
-  live_session_id        uuid not null references public.live_sessions(id) on delete cascade,
-  joined_at              timestamptz not null default now(),
-  left_at                timestamptz,
-  total_seconds_present  int,
-  primary key (user_id, live_session_id, joined_at)
-);
-
-create index attendance_user_session_idx
-  on public.attendance_records (user_id, live_session_id);
-
-alter table public.attendance_records enable row level security;
-
-create policy "attendance_select_own"
-  on public.attendance_records for select
-  to authenticated
-  using (auth.uid() = user_id);
-
-create policy "attendance_insert_own"
-  on public.attendance_records for insert
-  to authenticated
-  with check (auth.uid() = user_id);
-
-create policy "attendance_update_own"
-  on public.attendance_records for update
-  to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
--- ===========================================================================
--- 7. lesson_assets — anexos persistentes (PRD §4.2)
+-- 8. lesson_assets — anexos persistentes (PRD §4.2)
 -- ===========================================================================
 create table public.lesson_assets (
   id           uuid primary key default gen_random_uuid(),
@@ -302,7 +343,7 @@ create policy "lesson_assets_select_via_lesson"
   );
 
 -- ===========================================================================
--- 8. user_progress — refatorado para live-first (PRD §4.2)
+-- 9. user_progress — refatorado para live-first (PRD §4.2)
 -- ===========================================================================
 create table public.user_progress (
   user_id             uuid not null references auth.users(id) on delete cascade,
@@ -332,77 +373,37 @@ create policy "user_progress_update_own"
   with check (auth.uid() = user_id);
 
 -- ===========================================================================
--- 9. purchases — registro imutável Kiwify (PRD §4.2)
+-- 10. attendance_records — presença por (aluno, sessão) (PRD §4.2)
 -- ===========================================================================
-create table public.purchases (
-  id              uuid primary key default gen_random_uuid(),
-  user_id         uuid references auth.users(id) on delete set null,
-  email           text not null,
-  kiwify_order_id text not null unique,
-  product_code    text not null,
-  status          text not null
-                    check (status in ('paid', 'refunded', 'chargeback', 'canceled')),
-  amount_cents    int  not null,
-  currency        text not null default 'BRL',
-  purchased_at    timestamptz not null,
-  raw_payload     jsonb not null,
-  created_at      timestamptz not null default now()
+create table public.attendance_records (
+  user_id                uuid not null references auth.users(id) on delete cascade,
+  live_session_id        uuid not null references public.live_sessions(id) on delete cascade,
+  joined_at              timestamptz not null default now(),
+  left_at                timestamptz,
+  total_seconds_present  int,
+  primary key (user_id, live_session_id, joined_at)
 );
 
-create index purchases_email_idx on public.purchases (email);
+create index attendance_user_session_idx
+  on public.attendance_records (user_id, live_session_id);
 
-alter table public.purchases enable row level security;
+alter table public.attendance_records enable row level security;
 
--- SELECT: aluno vê apenas as próprias compras.
-create policy "purchases_select_own"
-  on public.purchases for select
+create policy "attendance_select_own"
+  on public.attendance_records for select
   to authenticated
   using (auth.uid() = user_id);
 
--- INSERT/UPDATE: apenas via service_role (webhook handler).
+create policy "attendance_insert_own"
+  on public.attendance_records for insert
+  to authenticated
+  with check (auth.uid() = user_id);
 
--- ---------------------------------------------------------------------------
--- 9.1 Trigger link_pending_purchases (PRD §4.4)
--- Quando um auth.users novo casa com purchases.email pendentes, espelha o
--- user_id para que o entitlement passe a valer imediatamente.
--- ---------------------------------------------------------------------------
-create or replace function public.link_pending_purchases()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  update public.purchases
-     set user_id = new.id
-   where user_id is null
-     and lower(email) = lower(new.email);
-  return new;
-end;
-$$;
-
-create trigger on_auth_user_created_link_purchases
-  after insert on auth.users
-  for each row execute function public.link_pending_purchases();
-
--- ===========================================================================
--- 10. entitlements — view de acesso ativo (PRD §4.2)
--- Refund/chargeback derruba acesso imediato pelo filtro status='paid'.
--- ===========================================================================
-create or replace view public.entitlements as
-select distinct
-  user_id,
-  product_code as track
-from public.purchases
-where status = 'paid'
-  and user_id is not null;
-
--- A view roda com permissões do invocador. Como `purchases` tem RLS, o
--- `select` da view só retorna linhas que o usuário pode ler — mas como
--- as policies de `modules`/`lessons`/etc. consultam a view via subquery,
--- precisamos garantir que o aluno autenticado consiga ler suas próprias
--- linhas (já coberto por purchases_select_own acima).
-grant select on public.entitlements to authenticated;
+create policy "attendance_update_own"
+  on public.attendance_records for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
 -- ===========================================================================
 -- 11. Trigger derive_attended_live (PRD §4.4)
