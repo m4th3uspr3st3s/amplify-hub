@@ -189,7 +189,7 @@ Unidade pedagógica de alto nível.
 | `slug` | `text` UNIQUE NOT NULL | |
 | `title` | `text` NOT NULL | |
 | `description` | `text` | |
-| `track` | `text` NOT NULL | enum: `protocolo_amplify`, `dmb`, `imago`, `amplisquad` |
+| `track` | `text` NOT NULL | enum: `protocolo_amplify`, `protocolo_atlas`, `dmb`, `imago`, `amplisquad` |
 | `order_index` | `int` NOT NULL | |
 | `published_at` | `timestamptz` (nullable) | |
 | `created_at` / `updated_at` | `timestamptz` | |
@@ -403,6 +403,7 @@ Variáveis de ambiente (`.env.example`):
 
 ```
 KIWIFY_PRODUCT_PROTOCOLO=protocolo_amplify
+KIWIFY_PRODUCT_ATLAS=protocolo_atlas
 KIWIFY_PRODUCT_DMB=dmb
 KIWIFY_PRODUCT_IMAGO=imago
 ```
@@ -540,6 +541,7 @@ STREAM_API_SECRET=
 # Kiwify
 KIWIFY_WEBHOOK_SECRET=
 KIWIFY_PRODUCT_PROTOCOLO=protocolo_amplify
+KIWIFY_PRODUCT_ATLAS=protocolo_atlas
 KIWIFY_PRODUCT_DMB=dmb
 KIWIFY_PRODUCT_IMAGO=imago
 
