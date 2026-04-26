@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Surface } from '@/components/ui/Surface'
+import { TrackTabs } from '@/components/dashboard/TrackTabs'
 import { createClient } from '@/lib/supabase/server'
 
 export const metadata = {
@@ -71,6 +72,62 @@ function formatGreetingName(fullName: string | null) {
   return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()
 }
 
+type TrackCard = {
+  slug: string
+  label: React.ReactNode
+  description: string
+  badge: string
+}
+
+function TrackGrid({ tracks }: { tracks: readonly TrackCard[] }) {
+  return (
+    <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+      {tracks.map((track, idx) => (
+        <Link
+          key={track.slug}
+          href={`/trilhas/${track.slug}`}
+          className="group block focus-visible:outline-none"
+        >
+          <Surface
+            variant="card"
+            interactive
+            className="relative h-full p-6 group-focus-visible:border-(--color-border-focus)"
+            style={{ animationDelay: `${idx * 60}ms` }}
+          >
+            <div className="flex h-full flex-col gap-4">
+              <div className="flex items-start justify-between gap-3">
+                <p
+                  className="font-sans text-[10px] font-semibold uppercase tracking-[0.2em]"
+                  style={{ color: 'rgba(201,164,122,0.85)' }}
+                >
+                  {track.badge}
+                </p>
+                <ArrowUpRight
+                  className="size-4 text-(--color-text-muted) transition-transform duration-(--duration-fast) ease-(--ease-std) group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-(--color-text-primary)"
+                  strokeWidth={1.5}
+                  aria-hidden
+                />
+              </div>
+
+              <h3 className="font-serif text-2xl font-semibold leading-tight tracking-tight">
+                {track.label}
+              </h3>
+
+              <p className="font-sans text-sm leading-relaxed text-(--color-text-secondary)">
+                {track.description}
+              </p>
+
+              <span className="mt-auto inline-flex items-center gap-1.5 font-sans text-xs font-medium uppercase tracking-[0.18em] text-(--color-text-muted) transition-colors duration-(--duration-fast) ease-(--ease-std) group-hover:text-(--color-bronze-400)">
+                Abrir trilha
+              </span>
+            </div>
+          </Surface>
+        </Link>
+      ))}
+    </div>
+  )
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient()
 
@@ -83,6 +140,11 @@ export default async function DashboardPage() {
   if (!user) {
     redirect('/login')
   }
+
+  // app_metadata é gerenciado via service role / Supabase Studio; user_metadata
+  // é editável pelo próprio usuário. Para claim de admin, usamos sempre
+  // app_metadata (PRD §4.2 — RLS de live_sessions/modules referencia este claim).
+  const isAdmin = user.app_metadata?.admin === true
 
   const [profileRes, liveRes] = await Promise.all([
     supabase
@@ -252,127 +314,38 @@ export default async function DashboardPage() {
           </Surface>
         </section>
 
-        {/* §3.3 Hierarquia de trilhas — Avançado primeiro, Fundamentos depois.
-            A query de live_sessions/RLS continua intacta: o agrupamento é
-            estritamente visual. Aluno só vê o card se o RLS devolver módulos
-            da trilha correspondente. */}
-        <section aria-labelledby="advanced-heading" className="space-y-6">
-          <div className="flex items-end justify-between">
-            <div>
-              <p className="label-section mb-2">Avançado</p>
-              <h2
-                id="advanced-heading"
-                className="font-serif text-2xl font-semibold leading-tight tracking-tight md:text-3xl"
-              >
-                Formação Avançada
+        {/* §3.3 Trilhas — Admin (Dr. Matheus) navega entre Atlas e Amplify
+            via abas; aluno comum vê apenas Fundamentos. A barreira real de
+            acesso a conteúdo (módulos, aulas, assets) é a RLS no Supabase. */}
+        {isAdmin ? (
+          <section aria-label="Trilhas">
+            <div className="mb-6">
+              <p className="label-section mb-2">Trilhas</p>
+              <h2 className="font-serif text-2xl font-semibold leading-tight tracking-tight md:text-3xl">
+                Acesso completo (modo admin)
               </h2>
             </div>
-          </div>
-
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {ADVANCED_TRACKS.map((track, idx) => (
-              <Link
-                key={track.slug}
-                href={`/trilhas/${track.slug}`}
-                className="group block focus-visible:outline-none"
-              >
-                <Surface
-                  variant="card"
-                  interactive
-                  className="relative h-full p-6 group-focus-visible:border-(--color-border-focus)"
-                  style={{ animationDelay: `${idx * 60}ms` }}
+            <TrackTabs
+              advanced={<TrackGrid tracks={ADVANCED_TRACKS} />}
+              foundation={<TrackGrid tracks={FOUNDATION_TRACKS} />}
+            />
+          </section>
+        ) : (
+          <section aria-labelledby="foundation-heading" className="space-y-6">
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="label-section mb-2">Trilhas</p>
+                <h2
+                  id="foundation-heading"
+                  className="font-serif text-2xl font-semibold leading-tight tracking-tight md:text-3xl"
                 >
-                  <div className="flex h-full flex-col gap-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <p
-                        className="font-sans text-[10px] font-semibold uppercase tracking-[0.2em]"
-                        style={{ color: 'rgba(201,164,122,0.85)' }}
-                      >
-                        {track.badge}
-                      </p>
-                      <ArrowUpRight
-                        className="size-4 text-(--color-text-muted) transition-transform duration-(--duration-fast) ease-(--ease-std) group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-(--color-text-primary)"
-                        strokeWidth={1.5}
-                        aria-hidden
-                      />
-                    </div>
-
-                    <h3 className="font-serif text-2xl font-semibold leading-tight tracking-tight">
-                      {track.label}
-                    </h3>
-
-                    <p className="font-sans text-sm leading-relaxed text-(--color-text-secondary)">
-                      {track.description}
-                    </p>
-
-                    <span className="mt-auto inline-flex items-center gap-1.5 font-sans text-xs font-medium uppercase tracking-[0.18em] text-(--color-text-muted) transition-colors duration-(--duration-fast) ease-(--ease-std) group-hover:text-(--color-bronze-400)">
-                      Abrir trilha
-                    </span>
-                  </div>
-                </Surface>
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section aria-labelledby="foundation-heading" className="space-y-6">
-          <div className="flex items-end justify-between">
-            <div>
-              <p className="label-section mb-2">Fundamentos</p>
-              <h2
-                id="foundation-heading"
-                className="font-serif text-2xl font-semibold leading-tight tracking-tight md:text-3xl"
-              >
-                Fundamentos &amp; Linha Amplify
-              </h2>
+                  Seu acesso ativo
+                </h2>
+              </div>
             </div>
-          </div>
-
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {FOUNDATION_TRACKS.map((track, idx) => (
-              <Link
-                key={track.slug}
-                href={`/trilhas/${track.slug}`}
-                className="group block focus-visible:outline-none"
-              >
-                <Surface
-                  variant="card"
-                  interactive
-                  className="relative h-full p-6 group-focus-visible:border-(--color-border-focus)"
-                  style={{ animationDelay: `${idx * 60}ms` }}
-                >
-                  <div className="flex h-full flex-col gap-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <p
-                        className="font-sans text-[10px] font-semibold uppercase tracking-[0.2em]"
-                        style={{ color: 'rgba(201,164,122,0.85)' }}
-                      >
-                        {track.badge}
-                      </p>
-                      <ArrowUpRight
-                        className="size-4 text-(--color-text-muted) transition-transform duration-(--duration-fast) ease-(--ease-std) group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-(--color-text-primary)"
-                        strokeWidth={1.5}
-                        aria-hidden
-                      />
-                    </div>
-
-                    <h3 className="font-serif text-2xl font-semibold leading-tight tracking-tight">
-                      {track.label}
-                    </h3>
-
-                    <p className="font-sans text-sm leading-relaxed text-(--color-text-secondary)">
-                      {track.description}
-                    </p>
-
-                    <span className="mt-auto inline-flex items-center gap-1.5 font-sans text-xs font-medium uppercase tracking-[0.18em] text-(--color-text-muted) transition-colors duration-(--duration-fast) ease-(--ease-std) group-hover:text-(--color-bronze-400)">
-                      Abrir trilha
-                    </span>
-                  </div>
-                </Surface>
-              </Link>
-            ))}
-          </div>
-        </section>
+            <TrackGrid tracks={FOUNDATION_TRACKS} />
+          </section>
+        )}
       </main>
     </div>
   )
