@@ -219,7 +219,7 @@ export default async function DashboardPage() {
               <div className="md:min-w-64">
                 {activeSession ? (
                   <Link
-                    href={`/aulas/${activeSession.stream_call_id}`}
+                    href={`/aulas/${activeSession.id}`}
                     className="btn-primary w-full"
                   >
                     <Radio className="size-4" aria-hidden />

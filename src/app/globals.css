@@ -579,3 +579,13 @@ input:-webkit-autofill:focus {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* =====================================================================
+   Stream Video — overrides para conformidade DS Universal §0.1 (44pt)
+   ===================================================================== */
+
+.amplify-stream-room .str-video__call-controls__button,
+.amplify-stream-room .str-video__composite-button {
+  min-width: 44px;
+  min-height: 44px;
+}
