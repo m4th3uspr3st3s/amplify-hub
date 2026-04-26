@@ -16,7 +16,17 @@ export const metadata = {
   title: 'Lobby · Amplify Hub',
 }
 
-const TRACKS = [
+const ADVANCED_TRACKS = [
+  {
+    slug: 'protocolo-atlas',
+    label: 'Protocolo Atlas',
+    description:
+      'Formação avançada em 9 módulos: operação de sistemas proprietários (Hermes, Vault, Claude Code) em escala clínica.',
+    badge: 'Avançado · 9 módulos',
+  },
+] as const
+
+const FOUNDATION_TRACKS = [
   {
     slug: 'protocolo-amplify',
     label: 'Protocolo Amplify',
@@ -242,22 +252,84 @@ export default async function DashboardPage() {
           </Surface>
         </section>
 
-        {/* §3.3 Grade de cards — Trilhas com hover-lift */}
-        <section aria-labelledby="tracks-heading" className="space-y-6">
+        {/* §3.3 Hierarquia de trilhas — Avançado primeiro, Fundamentos depois.
+            A query de live_sessions/RLS continua intacta: o agrupamento é
+            estritamente visual. Aluno só vê o card se o RLS devolver módulos
+            da trilha correspondente. */}
+        <section aria-labelledby="advanced-heading" className="space-y-6">
           <div className="flex items-end justify-between">
             <div>
-              <p className="label-section mb-2">Trilhas</p>
+              <p className="label-section mb-2">Avançado</p>
               <h2
-                id="tracks-heading"
+                id="advanced-heading"
                 className="font-serif text-2xl font-semibold leading-tight tracking-tight md:text-3xl"
               >
-                Seu acesso ativo
+                Formação Avançada
               </h2>
             </div>
           </div>
 
           <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {TRACKS.map((track, idx) => (
+            {ADVANCED_TRACKS.map((track, idx) => (
+              <Link
+                key={track.slug}
+                href={`/trilhas/${track.slug}`}
+                className="group block focus-visible:outline-none"
+              >
+                <Surface
+                  variant="card"
+                  interactive
+                  className="relative h-full p-6 group-focus-visible:border-(--color-border-focus)"
+                  style={{ animationDelay: `${idx * 60}ms` }}
+                >
+                  <div className="flex h-full flex-col gap-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <p
+                        className="font-sans text-[10px] font-semibold uppercase tracking-[0.2em]"
+                        style={{ color: 'rgba(201,164,122,0.85)' }}
+                      >
+                        {track.badge}
+                      </p>
+                      <ArrowUpRight
+                        className="size-4 text-(--color-text-muted) transition-transform duration-(--duration-fast) ease-(--ease-std) group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-(--color-text-primary)"
+                        strokeWidth={1.5}
+                        aria-hidden
+                      />
+                    </div>
+
+                    <h3 className="font-serif text-2xl font-semibold leading-tight tracking-tight">
+                      {track.label}
+                    </h3>
+
+                    <p className="font-sans text-sm leading-relaxed text-(--color-text-secondary)">
+                      {track.description}
+                    </p>
+
+                    <span className="mt-auto inline-flex items-center gap-1.5 font-sans text-xs font-medium uppercase tracking-[0.18em] text-(--color-text-muted) transition-colors duration-(--duration-fast) ease-(--ease-std) group-hover:text-(--color-bronze-400)">
+                      Abrir trilha
+                    </span>
+                  </div>
+                </Surface>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section aria-labelledby="foundation-heading" className="space-y-6">
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="label-section mb-2">Fundamentos</p>
+              <h2
+                id="foundation-heading"
+                className="font-serif text-2xl font-semibold leading-tight tracking-tight md:text-3xl"
+              >
+                Fundamentos &amp; Linha Amplify
+              </h2>
+            </div>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {FOUNDATION_TRACKS.map((track, idx) => (
               <Link
                 key={track.slug}
                 href={`/trilhas/${track.slug}`}
