@@ -40,7 +40,9 @@ export async function loginWithMagicLink(
   const { error } = await supabase.auth.signInWithOtp({
     email: parsed.data.email,
     options: {
-      emailRedirectTo: `${appUrl}/dashboard`,
+      // PKCE callback oficial — exchangeCodeForSession ocorre em
+      // /auth/callback/route.ts, que entao redireciona para `next`.
+      emailRedirectTo: `${appUrl}/auth/callback?next=/dashboard`,
       // Auth dual: o Supabase cria o usuário automaticamente se não existir.
       // O webhook Kiwify (Marco 6) é quem provisiona usuários pagos; este flag
       // permanece `true` enquanto o webhook não está em produção, para que o

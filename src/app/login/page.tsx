@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { KeyRound } from 'lucide-react'
 import { Surface } from '@/components/ui/Surface'
@@ -24,7 +25,11 @@ export default function LoginPage() {
 
         {/* §2.4 Surface elevada para form (chrome de autenticação) */}
         <Surface variant="elevated" className="mt-10 p-8 space-y-6">
-          <LoginForm />
+          {/* Suspense exigido pelo useSearchParams dentro de LoginForm
+              (Next.js bailout para CSR; sem boundary o build estatico falha). */}
+          <Suspense fallback={null}>
+            <LoginForm />
+          </Suspense>
 
           {/* Divisor — borda + label, sem sombra (§1.5) */}
           <div className="relative py-1">

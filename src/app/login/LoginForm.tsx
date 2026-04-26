@@ -1,7 +1,8 @@
 'use client'
 
-import { useActionState, useEffect } from 'react'
+import { useActionState, useEffect, useRef } from 'react'
 import { useFormStatus } from 'react-dom'
+import { useSearchParams } from 'next/navigation'
 import { Mail } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/Button'
@@ -29,6 +30,8 @@ function SubmitButton() {
 
 export function LoginForm() {
   const [state, formAction] = useActionState(loginWithMagicLink, INITIAL_STATE)
+  const searchParams = useSearchParams()
+  const callbackErrorShown = useRef(false)
 
   useEffect(() => {
     if (state.status === 'success') {
@@ -37,6 +40,16 @@ export function LoginForm() {
       toast.error(state.message)
     }
   }, [state])
+
+  // Erro vindo de /auth/callback (otp_expired, exchange falhou, etc.).
+  // useRef evita re-disparo se o componente re-renderiza com o mesmo param.
+  useEffect(() => {
+    const callbackError = searchParams.get('error')
+    if (callbackError && !callbackErrorShown.current) {
+      callbackErrorShown.current = true
+      toast.error(callbackError)
+    }
+  }, [searchParams])
 
   return (
     <form action={formAction} className="space-y-5" autoComplete="on">
