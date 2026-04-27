@@ -1,17 +1,20 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import {
+  ArrowRight,
   ArrowUpRight,
   CalendarClock,
+  CalendarDays,
   CircleUser,
   Clock,
-  Lock,
-  Radio,
 } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
+import { Countdown } from '@/components/live/Countdown'
+import { EnterRoomButton } from '@/components/live/EnterRoomButton'
 import { Surface } from '@/components/ui/Surface'
 import { TrackTabs } from '@/components/dashboard/TrackTabs'
 import { createClient } from '@/lib/supabase/server'
+import { cutoffIsoHoursAgo } from '@/lib/time'
+import { TRACK_LABELS, trackToUrlSlug, type Track } from '@/lib/tracks'
 
 export const metadata = {
   title: 'Lobby · Amplify Hub',
@@ -59,10 +62,22 @@ const DATE_FMT = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Sao_Paulo',
 })
 
+const SHORT_DATE_FMT = new Intl.DateTimeFormat('pt-BR', {
+  weekday: 'short',
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'America/Sao_Paulo',
+})
+
 function formatScheduledFor(iso: string) {
-  // "Quinta-feira, 30 de abril, 20:00" → padroniza com "·" entre data e hora.
   const parts = DATE_FMT.format(new Date(iso))
   return parts.replace(/,\s*(\d{2}:\d{2})$/, ' · $1')
+}
+
+function formatScheduledShort(iso: string) {
+  return SHORT_DATE_FMT.format(new Date(iso)).replace(',', ' ·')
 }
 
 function formatGreetingName(fullName: string | null) {
@@ -128,6 +143,41 @@ function TrackGrid({ tracks }: { tracks: readonly TrackCard[] }) {
   )
 }
 
+// A query traz `lessons.modules.track` para que possamos linkar
+// "Ver calendário completo" para a trilha correta da próxima live e
+// renderizar a track de origem em cada item da lista compacta.
+type UpcomingSession = {
+  id: string
+  title: string
+  scheduled_for: string
+  duration_minutes: number
+  is_active: boolean
+  lessons: {
+    title: string
+    modules: {
+      title: string
+      track: Track
+    } | null
+  } | null
+}
+
+function flattenLessonRel(
+  raw: NonNullable<UpcomingSession['lessons']> | NonNullable<UpcomingSession['lessons']>[] | null,
+): UpcomingSession['lessons'] {
+  if (!raw) return null
+  return Array.isArray(raw) ? (raw[0] ?? null) : raw
+}
+
+function flattenModuleRel(
+  raw:
+    | NonNullable<NonNullable<UpcomingSession['lessons']>['modules']>
+    | NonNullable<NonNullable<UpcomingSession['lessons']>['modules']>[]
+    | null,
+): NonNullable<UpcomingSession['lessons']>['modules'] {
+  if (!raw) return null
+  return Array.isArray(raw) ? (raw[0] ?? null) : raw
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient()
 
@@ -146,7 +196,11 @@ export default async function DashboardPage() {
   // app_metadata (PRD §4.2 — RLS de live_sessions/modules referencia este claim).
   const isAdmin = user.app_metadata?.admin === true
 
-  const [profileRes, liveRes] = await Promise.all([
+  // Cutoff: 2h atrás. Mantém visíveis lives que acabaram de começar (a sala
+  // em /aulas/[id] continua sendo a fonte da verdade durante o ao-vivo).
+  const cutoffIso = cutoffIsoHoursAgo(2)
+
+  const [profileRes, upcomingRes, entitlementsRes] = await Promise.all([
     supabase
       .from('profiles')
       .select('full_name')
@@ -155,22 +209,38 @@ export default async function DashboardPage() {
     supabase
       .from('live_sessions')
       .select(
-        'id, title, scheduled_for, duration_minutes, stream_call_id, lessons(title, modules(title, track))',
+        'id, title, scheduled_for, duration_minutes, is_active, lessons(title, modules(title, track))',
       )
-      .eq('is_active', true)
+      .gte('scheduled_for', cutoffIso)
       .order('scheduled_for', { ascending: true })
-      .limit(1)
-      .maybeSingle(),
+      .limit(3),
+    // RLS já filtra por auth.uid(); admin vê tudo. Usamos apenas para descobrir
+    // a primeira track do aluno e linkar o calendário completo.
+    supabase.from('entitlements').select('track').limit(5),
   ])
 
   const greetingName = formatGreetingName(profileRes.data?.full_name ?? null)
-  const activeSession = liveRes.data
-  const lesson = Array.isArray(activeSession?.lessons)
-    ? activeSession?.lessons[0]
-    : activeSession?.lessons
-  const moduleEntity = Array.isArray(lesson?.modules)
-    ? lesson?.modules[0]
-    : lesson?.modules
+  const upcomingRaw = (upcomingRes.data ?? []) as unknown as UpcomingSession[]
+  const upcoming = upcomingRaw.map((row) => {
+    const lesson = flattenLessonRel(row.lessons)
+    const moduleEntity = lesson ? flattenModuleRel(lesson.modules) : null
+    return {
+      ...row,
+      lessons: lesson ? { ...lesson, modules: moduleEntity } : null,
+    }
+  })
+
+  const heroSession = upcoming[0] ?? null
+  const restSessions = upcoming.slice(1)
+
+  // Trilha alvo do botão "Ver calendário completo": prioriza a track da próxima
+  // mentoria; senão, usa a primeira entitlement do aluno; admin sem nenhum
+  // dos dois cai em Atlas como default editorial.
+  const heroTrack = heroSession?.lessons?.modules?.track ?? null
+  const fallbackTrack =
+    (entitlementsRes.data?.[0]?.track as Track | undefined) ??
+    (isAdmin ? ('protocolo_atlas' as Track) : null)
+  const calendarTrack: Track | null = heroTrack ?? fallbackTrack
 
   return (
     <div className="min-h-screen">
@@ -220,7 +290,10 @@ export default async function DashboardPage() {
         </div>
 
         {/* §2.11 Hero card com accent bar bronze + cardIn animation */}
-        <section aria-labelledby="next-live-heading">
+        <section
+          aria-labelledby="next-live-heading"
+          className="space-y-5"
+        >
           <Surface
             variant="card"
             className="relative overflow-hidden p-6 md:p-8"
@@ -237,17 +310,19 @@ export default async function DashboardPage() {
 
             <div className="grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
               <div className="space-y-4">
-                {/* §2.5 label-section em bronze para destaque de "ao vivo" / "próximo" */}
                 <p
                   className="font-sans text-[10px] font-semibold uppercase tracking-[0.22em]"
                   style={{ color: 'rgba(201,164,122,0.85)' }}
                 >
-                  {activeSession ? 'Ao vivo agora' : 'Próxima mentoria ao vivo'}
+                  {heroSession?.is_active
+                    ? 'Ao vivo agora'
+                    : 'Próxima mentoria ao vivo'}
                 </p>
 
-                {activeSession && moduleEntity ? (
+                {heroSession?.lessons?.modules ? (
                   <p className="font-sans text-sm font-medium text-(--color-bronze-400)">
-                    {moduleEntity.title}
+                    {TRACK_LABELS[heroSession.lessons.modules.track]} ·{' '}
+                    {heroSession.lessons.modules.title}
                   </p>
                 ) : null}
 
@@ -255,63 +330,112 @@ export default async function DashboardPage() {
                   id="next-live-heading"
                   className="font-serif text-2xl font-semibold leading-tight tracking-tight md:text-3xl"
                 >
-                  {activeSession
-                    ? activeSession.title
-                    : 'Nenhuma sessão ao vivo neste momento.'}
+                  {heroSession
+                    ? heroSession.title
+                    : 'Nenhuma mentoria agendada no momento.'}
                 </h2>
 
-                {activeSession ? (
-                  <dl className="flex flex-wrap gap-x-8 gap-y-2 font-sans text-sm text-(--color-text-secondary)">
-                    <div className="flex items-center gap-2">
-                      <CalendarClock
-                        className="size-4 text-(--color-text-muted)"
-                        strokeWidth={1.5}
-                        aria-hidden
-                      />
-                      <dt className="sr-only">Quando</dt>
-                      <dd>{formatScheduledFor(activeSession.scheduled_for)}</dd>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock
-                        className="size-4 text-(--color-text-muted)"
-                        strokeWidth={1.5}
-                        aria-hidden
-                      />
-                      <dt className="sr-only">Duração</dt>
-                      <dd>{activeSession.duration_minutes} minutos</dd>
-                    </div>
-                  </dl>
+                {heroSession ? (
+                  <>
+                    <dl className="flex flex-wrap gap-x-8 gap-y-2 font-sans text-sm text-(--color-text-secondary)">
+                      <div className="flex items-center gap-2">
+                        <CalendarClock
+                          className="size-4 text-(--color-text-muted)"
+                          strokeWidth={1.5}
+                          aria-hidden
+                        />
+                        <dt className="sr-only">Quando</dt>
+                        <dd>{formatScheduledFor(heroSession.scheduled_for)}</dd>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock
+                          className="size-4 text-(--color-text-muted)"
+                          strokeWidth={1.5}
+                          aria-hidden
+                        />
+                        <dt className="sr-only">Duração</dt>
+                        <dd>{heroSession.duration_minutes} minutos</dd>
+                      </div>
+                    </dl>
+                    <p className="font-sans text-sm text-(--color-bronze-400)">
+                      <Countdown targetIso={heroSession.scheduled_for} />
+                    </p>
+                  </>
                 ) : (
                   <p className="font-sans text-sm text-(--color-text-muted)">
-                    Avisaremos por e-mail quando a próxima aula entrar no ar.
+                    Avisaremos por e-mail quando uma nova mentoria for marcada.
                   </p>
                 )}
               </div>
 
               <div className="md:min-w-64">
-                {activeSession ? (
-                  <Link
-                    href={`/aulas/${activeSession.id}`}
-                    className="btn-primary w-full"
-                  >
-                    <Radio className="size-4" aria-hidden />
-                    Entrar na sala
-                  </Link>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="lg"
-                    className="w-full"
-                    disabled
-                  >
-                    <Lock className="size-4" aria-hidden />
-                    A sala abre 15 minutos antes
-                  </Button>
-                )}
+                {heroSession ? (
+                  <EnterRoomButton
+                    liveSessionId={heroSession.id}
+                    scheduledForIso={heroSession.scheduled_for}
+                    isActive={heroSession.is_active}
+                    fullWidth
+                  />
+                ) : null}
               </div>
             </div>
           </Surface>
+
+          {/* Lista compacta · próximas mentorias (itens 2 e 3) */}
+          {restSessions.length > 0 ? (
+            <div className="space-y-2">
+              <p className="label-section">Em breve</p>
+              <ul role="list" className="space-y-2">
+                {restSessions.map((session) => {
+                  const moduleTitle = session.lessons?.modules?.title
+                  const trackLabel = session.lessons?.modules
+                    ? TRACK_LABELS[session.lessons.modules.track]
+                    : null
+                  return (
+                    <li key={session.id}>
+                      <Surface
+                        variant="surface"
+                        className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          {trackLabel || moduleTitle ? (
+                            <p className="font-sans text-[10px] font-semibold uppercase tracking-[0.22em] text-(--color-text-muted)">
+                              {[trackLabel, moduleTitle]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </p>
+                          ) : null}
+                          <p className="font-serif text-base font-semibold tracking-tight text-(--color-text-primary)">
+                            {session.title}
+                          </p>
+                        </div>
+                        <p className="font-sans text-xs text-(--color-text-secondary)">
+                          {formatScheduledShort(session.scheduled_for)}
+                        </p>
+                        <p className="font-sans text-xs text-(--color-bronze-400)">
+                          <Countdown targetIso={session.scheduled_for} />
+                        </p>
+                      </Surface>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* Link para o calendário completo da trilha do aluno */}
+          {calendarTrack ? (
+            <div className="flex justify-end">
+              <Link
+                href={`/trilhas/${trackToUrlSlug(calendarTrack)}/agenda`}
+                className="inline-flex min-h-11 items-center gap-1.5 font-sans text-xs font-semibold uppercase tracking-[0.18em] text-(--color-text-secondary) transition-colors duration-(--duration-fast) ease-(--ease-std) hover:text-(--color-text-primary)"
+              >
+                <CalendarDays className="size-4" strokeWidth={1.5} aria-hidden />
+                Ver calendário completo
+                <ArrowRight className="size-3.5" strokeWidth={1.75} aria-hidden />
+              </Link>
+            </div>
+          ) : null}
         </section>
 
         {/* §3.3 Trilhas — Admin (Dr. Matheus) navega entre Atlas e Amplify

@@ -13,6 +13,7 @@ import { AssetUploader } from '@/components/admin/AssetUploader'
 import { LessonBodyEditor } from '@/components/admin/LessonBodyEditor'
 import { LiveSessionScheduler } from '@/components/admin/LiveSessionScheduler'
 import { LessonAssetList } from '@/components/lesson/LessonAssetList'
+import { LessonNextLiveCard } from '@/components/lesson/LessonNextLiveCard'
 import { MarkdownLite } from '@/components/lesson/MarkdownLite'
 import { Surface } from '@/components/ui/Surface'
 import { createClient } from '@/lib/supabase/server'
@@ -127,6 +128,8 @@ export default async function LessonPage({
           </p>
         ) : null}
       </header>
+
+      <LessonNextLiveCard lessonId={lesson.id} />
 
       {isAdmin ? (
         <Surface variant="card" className="mb-10 p-6 md:p-8">
