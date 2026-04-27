@@ -10,6 +10,8 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ChevronRight, Lock } from 'lucide-react'
 import { AssetUploader } from '@/components/admin/AssetUploader'
+import { LessonBodyEditor } from '@/components/admin/LessonBodyEditor'
+import { LiveSessionScheduler } from '@/components/admin/LiveSessionScheduler'
 import { LessonAssetList } from '@/components/lesson/LessonAssetList'
 import { MarkdownLite } from '@/components/lesson/MarkdownLite'
 import { Surface } from '@/components/ui/Surface'
@@ -79,6 +81,7 @@ export default async function LessonPage({
 
   const trackLabel = TRACK_LABELS[track]
   const lessonIsDraft = lesson.published_at === null
+  const lessonRoute = `/trilhas/${trackSlug}/${moduleSlug}/${lessonSlug}`
 
   return (
     <main className="mx-auto max-w-3xl px-5 py-10 md:px-8 md:py-14">
@@ -125,7 +128,24 @@ export default async function LessonPage({
         ) : null}
       </header>
 
-      {lesson.body_md ? (
+      {isAdmin ? (
+        <Surface variant="card" className="mb-10 p-6 md:p-8">
+          <LessonBodyEditor
+            lessonId={lesson.id}
+            lessonRoute={lessonRoute}
+            initialBody={lesson.body_md}
+          >
+            {lesson.body_md ? (
+              <MarkdownLite source={lesson.body_md} />
+            ) : (
+              <p className="font-sans text-sm italic text-(--color-text-muted)">
+                Esta aula ainda não tem resumo. Clique em “Editar resumo” para
+                escrever o tema, objetivos e pré-requisitos.
+              </p>
+            )}
+          </LessonBodyEditor>
+        </Surface>
+      ) : lesson.body_md ? (
         <Surface variant="card" className="mb-10 p-6 md:p-8">
           <MarkdownLite source={lesson.body_md} />
         </Surface>
@@ -142,21 +162,37 @@ export default async function LessonPage({
       </section>
 
       {isAdmin ? (
-        <section
-          aria-labelledby="admin-uploader-heading"
-          className="mt-10 space-y-4"
-        >
-          <h2 id="admin-uploader-heading" className="sr-only">
-            Painel administrativo de upload
-          </h2>
-          <AssetUploader
-            lessonId={lesson.id}
-            lessonSlug={lesson.slug}
-            moduleSlug={moduleRow.slug}
-            trackSlug={trackSlug}
-            track={moduleRow.track}
-          />
-        </section>
+        <>
+          <section
+            aria-labelledby="admin-scheduler-heading"
+            className="mt-10 space-y-4"
+          >
+            <h2 id="admin-scheduler-heading" className="sr-only">
+              Painel administrativo de agendamento
+            </h2>
+            <LiveSessionScheduler
+              lessonId={lesson.id}
+              lessonTitle={lesson.title}
+              lessonRoute={lessonRoute}
+            />
+          </section>
+
+          <section
+            aria-labelledby="admin-uploader-heading"
+            className="mt-10 space-y-4"
+          >
+            <h2 id="admin-uploader-heading" className="sr-only">
+              Painel administrativo de upload
+            </h2>
+            <AssetUploader
+              lessonId={lesson.id}
+              lessonSlug={lesson.slug}
+              moduleSlug={moduleRow.slug}
+              trackSlug={trackSlug}
+              track={moduleRow.track}
+            />
+          </section>
+        </>
       ) : null}
     </main>
   )
