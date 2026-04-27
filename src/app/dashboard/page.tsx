@@ -5,16 +5,16 @@ import {
   ArrowUpRight,
   CalendarClock,
   CalendarDays,
-  CircleUser,
   Clock,
 } from 'lucide-react'
+import { TopNav } from '@/components/layout/TopNav'
 import { Countdown } from '@/components/live/Countdown'
 import { EnterRoomButton } from '@/components/live/EnterRoomButton'
 import { Surface } from '@/components/ui/Surface'
 import { TrackTabs } from '@/components/dashboard/TrackTabs'
 import { createClient } from '@/lib/supabase/server'
 import { cutoffIsoHoursAgo } from '@/lib/time'
-import { TRACK_LABELS, trackToUrlSlug, type Track } from '@/lib/tracks'
+import { TRACK_LABELS, type Track } from '@/lib/tracks'
 
 export const metadata = {
   title: 'Lobby · Amplify Hub',
@@ -200,7 +200,7 @@ export default async function DashboardPage() {
   // em /aulas/[id] continua sendo a fonte da verdade durante o ao-vivo).
   const cutoffIso = cutoffIsoHoursAgo(2)
 
-  const [profileRes, upcomingRes, entitlementsRes] = await Promise.all([
+  const [profileRes, upcomingRes] = await Promise.all([
     supabase
       .from('profiles')
       .select('full_name')
@@ -214,9 +214,6 @@ export default async function DashboardPage() {
       .gte('scheduled_for', cutoffIso)
       .order('scheduled_for', { ascending: true })
       .limit(3),
-    // RLS já filtra por auth.uid(); admin vê tudo. Usamos apenas para descobrir
-    // a primeira track do aluno e linkar o calendário completo.
-    supabase.from('entitlements').select('track').limit(5),
   ])
 
   const greetingName = formatGreetingName(profileRes.data?.full_name ?? null)
@@ -233,47 +230,9 @@ export default async function DashboardPage() {
   const heroSession = upcoming[0] ?? null
   const restSessions = upcoming.slice(1)
 
-  // Trilha alvo do botão "Ver calendário completo": prioriza a track da próxima
-  // mentoria; senão, usa a primeira entitlement do aluno; admin sem nenhum
-  // dos dois cai em Atlas como default editorial.
-  const heroTrack = heroSession?.lessons?.modules?.track ?? null
-  const fallbackTrack =
-    (entitlementsRes.data?.[0]?.track as Track | undefined) ??
-    (isAdmin ? ('protocolo_atlas' as Track) : null)
-  const calendarTrack: Track | null = heroTrack ?? fallbackTrack
-
   return (
     <div className="min-h-screen">
-      {/* §3.1 TopBar — Liquid Glass (única exceção à proibição de shadow §1.5) */}
-      <header
-        className="sticky top-0 z-[var(--z-layout)] w-full"
-        style={{
-          background: 'rgba(255,255,255,0.04)',
-          backdropFilter: 'blur(28px) saturate(160%)',
-          WebkitBackdropFilter: 'blur(28px) saturate(160%)',
-          borderTop: '1px solid rgba(255,255,255,0.14)',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          boxShadow:
-            '0 1px 0 rgba(255,255,255,0.07) inset, 0 8px 32px rgba(0,0,0,0.35)',
-        }}
-      >
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 md:px-8">
-          <Link
-            href="/dashboard"
-            className="font-serif text-xl tracking-tight text-(--color-text-primary)"
-          >
-            Amplify Hub
-          </Link>
-
-          <button
-            type="button"
-            aria-label="Abrir perfil"
-            className="inline-flex size-11 items-center justify-center rounded-md border border-(--color-border-default) bg-transparent text-(--color-text-secondary) transition-colors duration-(--duration-fast) ease-(--ease-std) hover:border-(--color-border-strong) hover:bg-white/5 hover:text-(--color-text-primary)"
-          >
-            <CircleUser className="size-5" strokeWidth={1.5} aria-hidden />
-          </button>
-        </div>
-      </header>
+      <TopNav />
 
       <main className="mx-auto max-w-6xl space-y-14 px-5 py-10 md:px-8 md:py-14">
         {/* §3.2 Page layout — section label + h1 + subtitle */}
@@ -423,19 +382,17 @@ export default async function DashboardPage() {
             </div>
           ) : null}
 
-          {/* Link para o calendário completo da trilha do aluno */}
-          {calendarTrack ? (
-            <div className="flex justify-end">
-              <Link
-                href={`/trilhas/${trackToUrlSlug(calendarTrack)}/agenda`}
-                className="inline-flex min-h-11 items-center gap-1.5 font-sans text-xs font-semibold uppercase tracking-[0.18em] text-(--color-text-secondary) transition-colors duration-(--duration-fast) ease-(--ease-std) hover:text-(--color-text-primary)"
-              >
-                <CalendarDays className="size-4" strokeWidth={1.5} aria-hidden />
-                Ver calendário completo
-                <ArrowRight className="size-3.5" strokeWidth={1.75} aria-hidden />
-              </Link>
-            </div>
-          ) : null}
+          {/* Link para o calendário global unificado (Lote 4 §3) */}
+          <div className="flex justify-end">
+            <Link
+              href="/agenda"
+              className="inline-flex min-h-11 items-center gap-1.5 font-sans text-xs font-semibold uppercase tracking-[0.18em] text-(--color-text-secondary) transition-colors duration-(--duration-fast) ease-(--ease-std) hover:text-(--color-text-primary)"
+            >
+              <CalendarDays className="size-4" strokeWidth={1.5} aria-hidden />
+              Ver calendário completo
+              <ArrowRight className="size-3.5" strokeWidth={1.75} aria-hidden />
+            </Link>
+          </div>
         </section>
 
         {/* §3.3 Trilhas — Admin (Dr. Matheus) navega entre Atlas e Amplify

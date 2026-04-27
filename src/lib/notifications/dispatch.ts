@@ -98,9 +98,9 @@ function buildContext(
     liveUrl: job.liveSessionId
       ? `${baseUrl}/aulas/${job.liveSessionId}`
       : `${baseUrl}/dashboard`,
-    agendaUrl: job.trackSlug
-      ? `${baseUrl}/trilhas/${job.trackSlug.replace(/_/g, '-')}/agenda`
-      : `${baseUrl}/dashboard`,
+    // Agenda agora é uma rota global unificada (Lote 4 §1) — RLS garante
+    // que cada aluno só vê as lives das suas trilhas ao abrir /agenda.
+    agendaUrl: `${baseUrl}/agenda`,
   }
 }
 
