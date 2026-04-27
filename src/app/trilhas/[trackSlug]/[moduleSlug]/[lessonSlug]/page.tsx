@@ -9,6 +9,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ChevronRight, Lock } from 'lucide-react'
+import { AssetUploader } from '@/components/admin/AssetUploader'
 import { LessonAssetList } from '@/components/lesson/LessonAssetList'
 import { MarkdownLite } from '@/components/lesson/MarkdownLite'
 import { Surface } from '@/components/ui/Surface'
@@ -139,6 +140,24 @@ export default async function LessonPage({
         </h2>
         <LessonAssetList lessonId={lesson.id} />
       </section>
+
+      {isAdmin ? (
+        <section
+          aria-labelledby="admin-uploader-heading"
+          className="mt-10 space-y-4"
+        >
+          <h2 id="admin-uploader-heading" className="sr-only">
+            Painel administrativo de upload
+          </h2>
+          <AssetUploader
+            lessonId={lesson.id}
+            lessonSlug={lesson.slug}
+            moduleSlug={moduleRow.slug}
+            trackSlug={trackSlug}
+            track={moduleRow.track}
+          />
+        </section>
+      ) : null}
     </main>
   )
 }

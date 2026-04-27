@@ -20,10 +20,14 @@
 // "use server").
 // ===========================================================================
 
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
 const SIGNED_URL_TTL_SECONDS = 60
 const STORAGE_BUCKET = 'lesson-assets'
+
+const ASSET_KINDS = ['pdf', 'slides', 'template', 'exercise', 'audio'] as const
+type AssetKindEnum = (typeof ASSET_KINDS)[number]
 
 type SignedUrlResult =
   | { url: string; filename: string }
@@ -72,4 +76,97 @@ export async function createAssetSignedUrl(
   }
 
   return { url: signed.signedUrl, filename }
+}
+
+// ===========================================================================
+// Server Action · registerAssetToDatabase
+// ===========================================================================
+// Chamada pelo AssetUploader (admin) APÓS o upload bem-sucedido para o bucket
+// `lesson-assets`. Persiste os metadados em public.lesson_assets e revalida
+// a rota da aula para que LessonAssetList renderize o novo arquivo na UI sem
+// reload manual.
+//
+// Defesa em camadas:
+//   1. auth.getUser() — descarta requisição anônima.
+//   2. Validação de claim app_metadata.admin === true antes do INSERT
+//      (defesa em código, redundante com a RLS criada na 0008).
+//   3. Validação do `kind` contra o CHECK constraint da tabela.
+//   4. INSERT com ON CONFLICT (lesson_id, storage_path) DO UPDATE — graças
+//      ao UNIQUE da migration 0007, retries de upload (mesmo path, mesma
+//      lesson) atualizam title/size_bytes em vez de duplicar a linha.
+// ===========================================================================
+
+type RegisterAssetPayload = {
+  lessonId: string
+  storagePath: string
+  title: string
+  kind: AssetKindEnum
+  sizeBytes: number
+  lessonRoute: string
+}
+
+type RegisterAssetResult =
+  | { ok: true; assetId: string }
+  | {
+      error:
+        | 'unauthorized'
+        | 'forbidden'
+        | 'invalid_payload'
+        | 'insert_failed'
+    }
+
+export async function registerAssetToDatabase(
+  payload: RegisterAssetPayload,
+): Promise<RegisterAssetResult> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'unauthorized' }
+  }
+
+  const isAdmin = user.app_metadata?.admin === true
+  if (!isAdmin) {
+    return { error: 'forbidden' }
+  }
+
+  const { lessonId, storagePath, title, kind, sizeBytes, lessonRoute } = payload
+
+  if (
+    !lessonId ||
+    !storagePath ||
+    !title.trim() ||
+    !ASSET_KINDS.includes(kind) ||
+    !Number.isFinite(sizeBytes) ||
+    sizeBytes <= 0 ||
+    !lessonRoute.startsWith('/trilhas/')
+  ) {
+    return { error: 'invalid_payload' }
+  }
+
+  const { data: inserted, error: insertError } = await supabase
+    .from('lesson_assets')
+    .upsert(
+      {
+        lesson_id: lessonId,
+        storage_path: storagePath,
+        title: title.trim(),
+        kind,
+        size_bytes: Math.round(sizeBytes),
+      },
+      { onConflict: 'lesson_id,storage_path' },
+    )
+    .select('id')
+    .single()
+
+  if (insertError || !inserted) {
+    return { error: 'insert_failed' }
+  }
+
+  revalidatePath(lessonRoute)
+
+  return { ok: true, assetId: inserted.id }
 }
