@@ -9,6 +9,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ArrowUpRight, ChevronRight, Lock } from 'lucide-react'
+import { PublishModuleToggle } from '@/components/admin/PublishModuleToggle'
 import { Surface } from '@/components/ui/Surface'
 import { createClient } from '@/lib/supabase/server'
 import { TRACK_LABELS, urlSlugToTrack } from '@/lib/tracks'
@@ -102,6 +103,14 @@ export default async function ModulePage({
           <p className="font-sans text-xs text-(--color-text-muted)">
             Modo admin · este módulo ainda não está publicado para os alunos.
           </p>
+        ) : null}
+        {isAdmin ? (
+          <div className="pt-1">
+            <PublishModuleToggle
+              moduleId={moduleRow.id}
+              isPublished={!moduleIsDraft}
+            />
+          </div>
         ) : null}
       </header>
 

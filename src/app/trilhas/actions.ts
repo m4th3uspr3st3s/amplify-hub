@@ -23,6 +23,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { trackToUrlSlug, type Track } from '@/lib/tracks'
 
 const SIGNED_URL_TTL_SECONDS = 60
 const STORAGE_BUCKET = 'lesson-assets'
@@ -359,4 +360,93 @@ export async function scheduleLiveSession(
   revalidatePath('/dashboard')
 
   return { ok: true, liveSessionId: inserted.id }
+}
+
+// ===========================================================================
+// Server Action · toggleModulePublication
+// ===========================================================================
+// Chamada pelo PublishModuleToggle (admin) para alternar o estado de
+// publicação de um módulo. `publish=true` define `published_at = now()`;
+// `publish=false` reverte para rascunho (`published_at = null`).
+//
+// Revalida a tela do módulo (`/trilhas/[trackSlug]/[moduleSlug]`) E a
+// listagem da track (`/trilhas/[trackSlug]`) — o badge "Em rascunho" e a
+// visibilidade para alunos sem entitlement dependem desse estado em ambas.
+//
+// Defesa em camadas:
+//   1. auth.getUser() — descarta requisição anônima.
+//   2. Validação de claim app_metadata.admin === true antes do UPDATE
+//      (defesa em código, redundante com a RLS criada na 0013).
+//   3. Validação do payload com Zod (moduleId UUID, publish boolean).
+//   4. UPDATE com retorno do `slug` + `track` para confirmar que a linha
+//      existia E que o RLS permitiu — se vier vazio, sinalizamos
+//      `not_found_or_forbidden`. Usamos o resultado também para revalidar
+//      as rotas certas sem exigir que o client envie redundantemente.
+// ===========================================================================
+
+const ToggleModulePublicationSchema = z.object({
+  moduleId: z.string().uuid(),
+  publish: z.boolean(),
+})
+
+type ToggleModulePublicationResult =
+  | { ok: true; isPublished: boolean }
+  | {
+      error:
+        | 'unauthorized'
+        | 'forbidden'
+        | 'invalid_payload'
+        | 'not_found_or_forbidden'
+        | 'update_failed'
+    }
+
+export async function toggleModulePublication(
+  moduleId: string,
+  publish: boolean,
+): Promise<ToggleModulePublicationResult> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'unauthorized' }
+  }
+
+  if (user.app_metadata?.admin !== true) {
+    return { error: 'forbidden' }
+  }
+
+  const parsed = ToggleModulePublicationSchema.safeParse({ moduleId, publish })
+  if (!parsed.success) {
+    return { error: 'invalid_payload' }
+  }
+
+  const nextPublishedAt = parsed.data.publish ? new Date().toISOString() : null
+
+  const { data: updated, error: updateError } = await supabase
+    .from('modules')
+    .update({ published_at: nextPublishedAt })
+    .eq('id', parsed.data.moduleId)
+    .select('slug, track')
+    .maybeSingle()
+
+  if (updateError) {
+    return { error: 'update_failed' }
+  }
+
+  if (!updated) {
+    return { error: 'not_found_or_forbidden' }
+  }
+
+  // O CHECK constraint usa underscore (`protocolo_amplify`) e a URL usa
+  // hífen (`/trilhas/protocolo-amplify`). trackToUrlSlug centraliza a
+  // conversão — evita drift se um novo track for adicionado.
+  const trackUrlSlug = trackToUrlSlug(updated.track as Track)
+
+  revalidatePath(`/trilhas/${trackUrlSlug}`)
+  revalidatePath(`/trilhas/${trackUrlSlug}/${updated.slug}`)
+
+  return { ok: true, isPublished: parsed.data.publish }
 }
