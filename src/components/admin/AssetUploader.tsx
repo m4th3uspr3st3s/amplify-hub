@@ -25,7 +25,7 @@ import { createClient } from '@/lib/supabase/browser'
 import { cn } from '@/lib/cn'
 
 const STORAGE_BUCKET = 'lesson-assets'
-const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // alinhado com bucket (0005)
+const MAX_FILE_SIZE_BYTES = 150 * 1024 * 1024 // alinhado com bucket (0011)
 
 const KIND_OPTIONS = [
   { value: 'pdf', label: 'PDF' },
@@ -84,7 +84,7 @@ export function AssetUploader({
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const next = event.target.files?.[0] ?? null
     if (next && next.size > MAX_FILE_SIZE_BYTES) {
-      toast.error('Arquivo excede 50 MB. Comprima o PDF antes do upload.')
+      toast.error('Arquivo excede 150 MB. Comprima o PDF antes do upload.')
       event.target.value = ''
       setFile(null)
       return
